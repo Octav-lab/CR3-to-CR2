@@ -1,25 +1,26 @@
+
 <!DOCTYPE html>
 <html lang="ro">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CR3 to CR2 - Data Link</title>
     
     <!-- Content Security Policy pentru protecție XSS -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline';">
     
-    <!-- Tailwind CSS pentru design responsiv rapid -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- JSZip pentru crearea arhivei ZIP -->
+    <!-- JSZip -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
-        /* Tematica Matrix / Minimalistă */
+        /* Tematica Matrix */
         :root {
             --matrix-dark: #050505;
-            --matrix-olive: #556B2F;       /* Verde olive inchis */
-            --matrix-olive-light: #6B8E23; /* Verde olive mai deschis pentru hover */
+            --matrix-olive: #556B2F;
+            --matrix-olive-light: #6B8E23;
             --matrix-glow: rgba(107, 142, 35, 0.4);
         }
 
@@ -27,33 +28,36 @@
             background-color: var(--matrix-dark);
             color: var(--matrix-olive);
             font-family: 'Courier New', Courier, monospace;
-            overflow-x: hidden;
+            overflow: hidden; /* Previne scroll-ul paginii, facem scroll doar în liste */
             margin: 0;
             padding: 0;
-            min-height: 100vh;
+            height: 100dvh; /* Folosim dvh pentru a ne adapta la bara de navigare pe mobil */
             display: flex;
             flex-direction: column;
         }
 
-        /* Ascundem scrollbar-ul pentru un aspect mai curat */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: var(--matrix-dark); }
-        ::-webkit-scrollbar-thumb { background: var(--matrix-olive); border-radius: 4px; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--matrix-olive); border-radius: 10px; }
 
         .btn-matrix {
             background-color: transparent;
             color: var(--matrix-olive);
             border: 2px solid var(--matrix-olive);
-            padding: 12px 24px;
-            font-size: 1.2rem;
+            font-weight: bold;
             text-transform: uppercase;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 0 10px var(--matrix-glow);
+            box-shadow: 0 0 8px var(--matrix-glow);
             border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 24px;
         }
 
-        .btn-matrix:hover {
+        .btn-matrix:active, .btn-matrix:hover {
             background-color: var(--matrix-olive);
             color: var(--matrix-dark);
             box-shadow: 0 0 20px var(--matrix-olive-light);
@@ -63,180 +67,197 @@
             background-color: transparent;
             color: var(--matrix-olive-light);
             border: 1px solid var(--matrix-olive);
-            padding: 8px 12px;
+            padding: 12px;
             font-family: 'Courier New', Courier, monospace;
             outline: none;
             width: 100%;
-            max-width: 300px;
+            /* 16px previne auto-zoom pe iOS */
+            font-size: 16px; 
+            border-radius: 4px;
         }
 
         .input-matrix:focus {
-            box-shadow: 0 0 10px var(--matrix-glow);
+            box-shadow: 0 0 12px var(--matrix-glow);
+            border-color: var(--matrix-olive-light);
         }
 
-        /* Animație Upload */
         .upload-pulse {
             animation: pulse 2s infinite;
         }
         @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 10px var(--matrix-glow); }
-            50% { transform: scale(1.05); box-shadow: 0 0 25px var(--matrix-olive-light); }
-            100% { transform: scale(1); box-shadow: 0 0 10px var(--matrix-glow); }
+            0% { transform: scale(1); box-shadow: 0 0 8px var(--matrix-glow); }
+            50% { transform: scale(1.02); box-shadow: 0 0 20px var(--matrix-olive-light); }
+            100% { transform: scale(1); box-shadow: 0 0 8px var(--matrix-glow); }
         }
 
-        /* Tubul de transfer */
-        .tube-container {
+        /* --- TUBUL DE ANIMAȚIE (RESPONSIV PURE CSS) --- */
+        .tube-wrapper {
             display: flex;
             align-items: center;
             justify-content: center;
-            position: relative;
-            height: 100%;
-            min-height: 200px;
+            flex-shrink: 0;
+            width: 100%;
+            height: 3rem; /* Înălțime pentru mobil */
         }
-
-        .tube {
-            width: 80%;
-            height: 4px;
-            background-color: rgba(85, 107, 47, 0.2);
+        
+        .tube-line {
+            width: 4px; /* Grosimea tubului pe mobil */
+            height: 100%;
+            background: rgba(85, 107, 47, 0.2);
             position: relative;
-            border-radius: 2px;
             overflow: hidden;
+            border-radius: 4px;
         }
 
-        .data-packet {
+        .packet {
             position: absolute;
-            top: 0;
             left: 0;
-            height: 100%;
-            width: 20px;
-            background-color: var(--matrix-olive-light);
+            top: 0;
+            width: 100%;
+            height: 20px;
+            background: var(--matrix-olive-light);
             box-shadow: 0 0 15px 5px var(--matrix-olive-light);
             opacity: 0;
         }
 
-        .animating-packet {
-            animation: moveData 1.5s ease-in-out forwards;
+        .animate-packet {
+            animation: moveDown 0.8s ease-in-out forwards;
         }
 
-        @keyframes moveData {
-            0% { left: 0; opacity: 1; }
+        @keyframes moveDown {
+            0% { top: -20px; opacity: 1; }
+            80% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* Pentru PC (Desktop) adaptăm orientarea pe orizontală */
+        @media (min-width: 768px) {
+            .tube-wrapper {
+                width: 6rem;
+                height: 100%;
+            }
+            .tube-line {
+                width: 100%;
+                height: 4px;
+            }
+            .packet {
+                width: 30px;
+                height: 100%;
+            }
+            .animate-packet {
+                animation: moveRight 0.8s ease-in-out forwards;
+            }
+        }
+
+        @keyframes moveRight {
+            0% { left: -30px; opacity: 1; }
             80% { opacity: 1; }
             100% { left: 100%; opacity: 0; }
         }
 
+        /* Design Elemente Fișiere */
         .file-item {
-            padding: 8px;
+            padding: 10px 8px;
             border-bottom: 1px dashed rgba(85, 107, 47, 0.3);
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-size: 0.85rem;
-            word-break: break-all;
             opacity: 0;
-            animation: fadeIn 0.5s forwards;
+            animation: fadeIn 0.4s ease-out forwards;
+            gap: 8px;
         }
         
-        .file-size {
+        .file-name {
+            flex: 1;
             white-space: nowrap;
-            margin-left: 10px;
+            overflow: hidden;
+            text-overflow: ellipsis; /* Puncte-puncte pt nume prea lungi */
+        }
+
+        .file-size {
+            flex-shrink: 0;
             opacity: 0.8;
             font-size: 0.75rem;
+            font-weight: bold;
         }
 
         @keyframes fadeIn {
-            to { opacity: 1; }
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         /* Modal Eroare */
-        #errorModal {
-            backdrop-filter: blur(5px);
-        }
         .modal-content {
-            background-color: #050505;
-            border: 2px solid #8b0000; /* Roșu închis pentru eroare */
-            box-shadow: 0 0 20px rgba(139, 0, 0, 0.5);
-        }
-        .text-error {
-            color: #ff4444;
-        }
-        .btn-error {
-            border-color: #8b0000;
-            color: #ff4444;
-        }
-        .btn-error:hover {
-            background-color: #8b0000;
-            color: white;
+            background-color: #0a0a0a;
+            border: 2px solid #a00;
+            box-shadow: 0 0 25px rgba(170, 0, 0, 0.4);
         }
     </style>
 </head>
-<body>
+<body class="p-3 md:p-6">
 
     <!-- MODAL EROARE -->
-    <div id="errorModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 p-4">
-        <div class="modal-content p-6 max-w-sm w-full text-center rounded">
-            <h2 class="text-error text-xl font-bold mb-4">SYSTEM_ERROR</h2>
-            <p id="errorMessage" class="text-error mb-6 text-sm">Fișier invalid detectat.</p>
-            <button onclick="closeError()" class="btn-matrix btn-error text-sm px-6 py-2 w-full">REBOOT_SYSTEM (Închide)</button>
+    <div id="errorModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+        <div class="modal-content p-6 max-w-sm w-full text-center rounded-lg">
+            <h2 class="text-[#ff4444] text-xl font-bold mb-4 tracking-wider">SYSTEM_ERROR</h2>
+            <p id="errorMessage" class="text-[#ff4444] mb-6 text-sm">Fișier invalid detectat.</p>
+            <button onclick="closeError()" class="w-full py-3 text-sm font-bold border-2 border-[#a00] text-[#ff4444] hover:bg-[#a00] hover:text-white transition-colors rounded">
+                [ REBOOT_SYSTEM ]
+            </button>
         </div>
     </div>
 
     <!-- ECRAN 1: UPLOAD -->
-    <div id="uploadView" class="flex-1 flex flex-col items-center justify-center p-4 transition-opacity duration-500">
-        <h1 class="text-3xl md:text-5xl font-bold mb-8 tracking-widest text-center">DATA_LINK_PROTOCOL</h1>
-        <p class="mb-12 opacity-75 text-center max-w-md text-sm md:text-base">
-            Sistem pregătit. Atașați fișierele RAW (.CR3 / .CR2). Protocoalele de conversie a numelor vor fi inițiate automat.
+    <div id="uploadView" class="flex-1 flex flex-col items-center justify-center transition-opacity duration-500 w-full max-w-md mx-auto">
+        <h1 class="text-3xl md:text-5xl font-bold mb-6 tracking-widest text-center">DATA_LINK</h1>
+        <p class="mb-10 opacity-75 text-center text-sm md:text-base px-2">
+            Inițiați transferul. Atașați fișiere RAW (.CR3 / .CR2). Conversia structurii va rula automat.
         </p>
         
-        <label for="fileInput" class="btn-matrix upload-pulse flex items-center justify-center text-center">
+        <label for="fileInput" class="btn-matrix upload-pulse w-full text-lg cursor-pointer">
             [ INIȚIAZĂ UPLOAD ]
         </label>
         <input type="file" id="fileInput" multiple accept=".cr3,.cr2" class="hidden" onchange="handleFiles(event)">
     </div>
 
-    <!-- ECRAN 2: PROCESARE (Split Screen) -->
-    <div id="processingView" class="hidden flex-1 flex flex-col md:flex-row w-full h-full p-2 md:p-8 overflow-hidden gap-4 transition-opacity duration-500">
+    <!-- ECRAN 2: PROCESARE -->
+    <div id="processingView" class="hidden flex-1 flex-col md:flex-row w-full h-full gap-2 md:gap-6 overflow-hidden relative">
         
-        <!-- Stânga: Fisiere Initiale (CR3) -->
-        <div class="flex-1 border border-[var(--matrix-olive)] rounded p-4 flex flex-col h-1/3 md:h-full overflow-hidden">
-            <h2 class="text-center border-b border-[var(--matrix-olive)] pb-2 mb-4 font-bold">SOURCE_DATA [.CR3]</h2>
-            <div id="sourceList" class="overflow-y-auto flex-1 pr-2">
-                <!-- Aici apar fișierele incarcate -->
-            </div>
+        <!-- Stânga/Sus: Sursa -->
+        <div class="flex-1 border border-[var(--matrix-olive)] rounded-lg p-3 md:p-5 flex flex-col overflow-hidden bg-black/40">
+            <h2 class="text-center border-b border-[var(--matrix-olive)] pb-2 mb-2 font-bold tracking-widest text-sm md:text-base">SOURCE [.CR3]</h2>
+            <div id="sourceList" class="overflow-y-auto flex-1 pr-1 custom-scrollbar"></div>
         </div>
 
         <!-- Mijloc: Tub Animatie -->
-        <div class="w-full md:w-32 h-24 md:h-full flex-shrink-0 relative">
-            <div class="tube-container flex-col md:flex-row">
-                <div class="tube md:w-full md:h-4 w-4 h-full">
-                    <div id="dataPacket" class="data-packet hidden md:block"></div>
-                    <!-- Pentru mobil (tub vertical) avem nevoie de un packet adaptat -->
-                    <div id="dataPacketMobile" class="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-8 bg-[var(--matrix-olive-light)] shadow-[0_0_15px_5px_var(--matrix-olive-light)] opacity-0 hidden md:hidden"></div>
-                </div>
+        <div class="tube-wrapper">
+            <div class="tube-line">
+                <div id="dataPacket" class="packet"></div>
             </div>
         </div>
 
-        <!-- Dreapta: Fisiere Convertite (CR2) -->
-        <div class="flex-1 border border-[var(--matrix-olive)] rounded p-4 flex flex-col h-1/3 md:h-full overflow-hidden relative">
-            <h2 class="text-center border-b border-[var(--matrix-olive)] pb-2 mb-4 font-bold">TARGET_DATA [.CR2]</h2>
-            <div id="targetList" class="overflow-y-auto flex-1 pr-2">
-                <!-- Aici apar fișierele convertite -->
-            </div>
-            
-            <!-- Zona de Download (Apare la final) -->
-            <div id="downloadOverlay" class="absolute inset-0 bg-[var(--matrix-dark)]/90 backdrop-blur-sm hidden flex-col items-center justify-center p-6 text-center">
-                <h3 class="text-xl mb-4 text-[var(--matrix-olive-light)] font-bold">PROTOCOL_COMPLET</h3>
+        <!-- Dreapta/Jos: Ținta -->
+        <div class="flex-1 border border-[var(--matrix-olive)] rounded-lg p-3 md:p-5 flex flex-col overflow-hidden bg-black/40">
+            <h2 class="text-center border-b border-[var(--matrix-olive)] pb-2 mb-2 font-bold tracking-widest text-[var(--matrix-olive-light)] text-sm md:text-base">TARGET [.CR2]</h2>
+            <div id="targetList" class="overflow-y-auto flex-1 pr-1 custom-scrollbar"></div>
+        </div>
+        
+        <!-- OVERLAY DOWNLOAD (Acoperă întreg ecranul de procesare la final) -->
+        <div id="downloadOverlay" class="absolute inset-0 z-10 bg-[var(--matrix-dark)]/95 backdrop-blur-md hidden flex-col items-center justify-center p-4">
+            <div class="w-full max-w-sm flex flex-col items-center">
+                <h3 class="text-2xl mb-8 text-[var(--matrix-olive-light)] font-bold tracking-widest">PROTOCOL_COMPLET</h3>
                 
-                <div class="w-full flex flex-col items-center gap-4 mb-6">
-                    <label class="text-sm opacity-80">Nume Arhivă ZIP:</label>
-                    <input type="text" id="zipName" value="Pachet_Date_CR2" class="input-matrix text-center" placeholder="nume_arhivă">
+                <div class="w-full flex flex-col gap-2 mb-8">
+                    <label class="text-sm opacity-80 pl-1">Nume Arhivă ZIP:</label>
+                    <input type="text" id="zipName" value="Pachet_Date_CR2" class="input-matrix" placeholder="Numele arhivei..." autocomplete="off">
                 </div>
                 
-                <button onclick="downloadZip()" id="downloadBtn" class="btn-matrix w-full max-w-[250px] mb-4">
+                <button onclick="downloadZip()" id="downloadBtn" class="btn-matrix w-full mb-4 text-base">
                     [ DOWNLOAD ZIP ]
                 </button>
                 
-                <!-- NOU: Butonul de BACK -->
-                <button onclick="resetApp()" class="btn-matrix w-full max-w-[250px] text-sm py-2 opacity-70 hover:opacity-100" style="border-style: dashed;">
+                <button onclick="resetApp()" class="w-full py-3 text-sm border border-dashed border-[var(--matrix-olive)] text-[var(--matrix-olive)] hover:bg-[var(--matrix-olive)] hover:text-black transition-colors rounded">
                     < SYSTEM_RESTART (Înapoi) >
                 </button>
             </div>
@@ -247,59 +268,53 @@
         let processedFiles = [];
         let zip = null;
 
-        // Utilitar pentru afișarea dimensiunii în MB
         function formatBytesToMB(bytes) {
-            const mb = bytes / (1024 * 1024);
-            return mb.toFixed(2) + ' MB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
         }
 
-        // Afișare Modal Eroare
         function showError(message) {
             document.getElementById('errorMessage').innerText = message;
             document.getElementById('errorModal').classList.remove('hidden');
         }
 
-        // Închidere Modal Eroare
         function closeError() {
             document.getElementById('errorModal').classList.add('hidden');
         }
 
-        // NOU: Funcția de resetare a aplicației (Back button)
         function resetApp() {
-            // Curăță datele din memorie
             processedFiles = [];
             zip = null;
-            document.getElementById('fileInput').value = ''; // Resetează input-ul file
+            document.getElementById('fileInput').value = '';
             
-            // Curăță listele vizuale
             document.getElementById('sourceList').innerHTML = '';
             document.getElementById('targetList').innerHTML = '';
             
-            // Ascunde overlay-ul de download și ecranul de procesare
-            document.getElementById('downloadOverlay').classList.add('hidden');
-            document.getElementById('downloadOverlay').classList.remove('flex');
+            const overlay = document.getElementById('downloadOverlay');
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
             
-            document.getElementById('processingView').classList.add('hidden');
+            const procView = document.getElementById('processingView');
+            procView.classList.add('hidden');
+            procView.classList.remove('flex');
             
-            // Reafișează ecranul de upload
             document.getElementById('uploadView').classList.remove('hidden');
             
-            // Resetează textul butonului de download
-            document.getElementById('downloadBtn').innerText = '[ DOWNLOAD ZIP ]';
-            document.getElementById('downloadBtn').disabled = false;
+            const dBtn = document.getElementById('downloadBtn');
+            dBtn.innerText = '[ DOWNLOAD ZIP ]';
+            dBtn.disabled = false;
+            dBtn.style.opacity = '1';
         }
 
-        // Funcția principală care se execută la selectarea fișierelor
         async function handleFiles(event) {
             const files = Array.from(event.target.files);
             if (files.length === 0) return;
 
-            // VALIDARE: Verificăm dacă toate fișierele sunt .cr3 sau .cr2
+            // Validare Extensie
             for (let i = 0; i < files.length; i++) {
                 const fileName = files[i].name.toLowerCase();
                 if (!fileName.endsWith('.cr3') && !fileName.endsWith('.cr2')) {
-                    showError(`Fișier nepermis: ${files[i].name}\nDoar extensiile .CR3 și .CR2 sunt acceptate.`);
-                    event.target.value = ''; // Respingem selecția
+                    showError(`Fișier nepermis: ${files[i].name}\nAcceptat: .CR3 și .CR2`);
+                    event.target.value = ''; 
                     return;
                 }
             }
@@ -307,104 +322,71 @@
             processedFiles = files;
             zip = new JSZip();
 
-            // Trecem la UI-ul de procesare
+            // Schimbare ecrane
             document.getElementById('uploadView').classList.add('hidden');
-            document.getElementById('processingView').classList.remove('hidden');
-            document.getElementById('processingView').classList.add('flex'); // pentru a forta flex layout-ul
+            const procView = document.getElementById('processingView');
+            procView.classList.remove('hidden');
+            procView.classList.add('flex');
 
             const sourceList = document.getElementById('sourceList');
             const targetList = document.getElementById('targetList');
-            const packetDesktop = document.getElementById('dataPacket');
-            const packetMobile = document.getElementById('dataPacketMobile');
+            const dataPacket = document.getElementById('dataPacket');
 
-            // Setăm animația specifică (desktop = stânga-dreapta, mobil = sus-jos)
-            const isMobile = window.innerWidth < 768;
-            
-            // CSS custom pentru animația pe verticală (mobil) injectat dinamic
-            if (isMobile) {
-                const style = document.createElement('style');
-                style.innerHTML = `
-                    @keyframes moveDataMobile {
-                        0% { top: 0; opacity: 1; }
-                        80% { opacity: 1; }
-                        100% { top: 100%; opacity: 0; }
-                    }
-                    .animating-packet-mobile {
-                        animation: moveDataMobile 1.2s ease-in-out forwards;
-                        display: block !important;
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-
-            // Procesăm fiecare fișier cu o mică întârziere pentru efectul vizual
+            // Procesare secvențială pentru efect vizual
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const originalName = file.name;
                 const sizeStr = `[${formatBytesToMB(file.size)}]`;
                 
-                // Schimbăm extensia indiferent dacă era cr3, devine sigur cr2 (sau ramane cr2)
+                // Conversie nume (CR3 -> CR2)
                 const newName = originalName.substring(0, originalName.lastIndexOf('.')) + '.CR2';
-
-                // Adăugăm în arhiva ZIP datele brute ale fișierului sub noul nume
                 zip.file(newName, file);
 
-                // 1. Adăugăm în lista Sursă
+                // 1. Apare in Sursă
                 const sourceEl = document.createElement('div');
                 sourceEl.className = 'file-item';
-                sourceEl.innerHTML = `<span>> ${originalName}</span> <span class="file-size">${sizeStr}</span>`;
+                sourceEl.innerHTML = `<span class="file-name">> ${originalName}</span> <span class="file-size">${sizeStr}</span>`;
                 sourceList.appendChild(sourceEl);
                 sourceList.scrollTop = sourceList.scrollHeight;
 
-                // 2. Declanșăm animația prin tub
-                if (isMobile) {
-                    packetMobile.classList.remove('animating-packet-mobile');
-                    void packetMobile.offsetWidth; // trigger reflow
-                    packetMobile.classList.add('animating-packet-mobile');
-                } else {
-                    packetDesktop.classList.remove('animating-packet');
-                    void packetDesktop.offsetWidth; // trigger reflow
-                    packetDesktop.classList.add('animating-packet');
-                }
+                // 2. Declanșare animație tub
+                dataPacket.classList.remove('animate-packet');
+                void dataPacket.offsetWidth; // Force DOM reflow
+                dataPacket.classList.add('animate-packet');
 
-                // Așteptăm puțin pentru a simula timpul de transfer
-                await new Promise(r => setTimeout(r, 600));
+                // Așteptăm animația de transfer
+                await new Promise(r => setTimeout(r, 450));
 
-                // 3. Adăugăm în lista Țintă
+                // 3. Apare in Țintă
                 const targetEl = document.createElement('div');
-                targetEl.className = 'file-item';
-                targetEl.style.color = 'var(--matrix-olive-light)';
-                targetEl.innerHTML = `<span>> ${newName}</span> <span class="file-size">${sizeStr}</span>`;
+                targetEl.className = 'file-item text-[var(--matrix-olive-light)]';
+                targetEl.innerHTML = `<span class="file-name">> ${newName}</span> <span class="file-size">${sizeStr}</span>`;
                 targetList.appendChild(targetEl);
                 targetList.scrollTop = targetList.scrollHeight;
 
-                await new Promise(r => setTimeout(r, 400));
+                await new Promise(r => setTimeout(r, 200));
             }
 
-            // Procesare finalizată, afișăm meniul de Download
+            // Arată meniul de final
             setTimeout(() => {
-                document.getElementById('downloadOverlay').classList.remove('hidden');
-                document.getElementById('downloadOverlay').classList.add('flex');
-            }, 500);
+                const overlay = document.getElementById('downloadOverlay');
+                overlay.classList.remove('hidden');
+                overlay.classList.add('flex');
+            }, 600);
         }
 
-        // Generarea și descărcarea arhivei
         async function downloadZip() {
             const btn = document.getElementById('downloadBtn');
-            const nameInput = document.getElementById('zipName').value || 'Pachet_Date_CR2';
+            const nameInput = document.getElementById('zipName').value.trim() || 'Pachet_Date_CR2';
             
             btn.innerText = '[ SE COMPILEAZĂ... ]';
             btn.disabled = true;
-            btn.style.opacity = '0.7';
+            btn.style.opacity = '0.5';
 
             try {
-                // Generam fișierul zip asincron
-                const content = await zip.generateAsync({
-                    type: "blob",
-                    compression: "STORE" // Fara compresie pentru viteza maxima (pozele raw oricum nu se comprima bine)
-                });
-
-                // Creăm un link temporar pentru a forța descărcarea
+                // Fara compresie pentru viteza pe mobil (imaginile RAW oricum sunt mari)
+                const content = await zip.generateAsync({ type: "blob", compression: "STORE" });
+                
                 const url = URL.createObjectURL(content);
                 const a = document.createElement("a");
                 a.href = url;
@@ -412,7 +394,6 @@
                 document.body.appendChild(a);
                 a.click();
                 
-                // Curățăm
                 setTimeout(() => {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
@@ -420,8 +401,8 @@
                 }, 100);
 
             } catch (error) {
-                console.error("Eroare la generare ZIP:", error);
-                showError("SYSTEM_FAULT: Eroare la compilarea arhivei. Verificați memoria disponibilă.");
+                console.error("Eroare:", error);
+                showError("EROARE: Nu s-a putut genera arhiva. Memorie insuficientă pe dispozitiv.");
                 btn.innerText = '[ EROARE CRITICĂ ]';
             }
         }
