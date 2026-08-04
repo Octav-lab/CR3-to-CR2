@@ -3,6 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    
+    <!-- ================= MASURI DE SECURITATE ================= -->
+    <!-- Content Security Policy (CSP) - Previne executarea de scripturi neautorizate -->
+    <!-- Permitem doar CDN-urile strict necesare (Tailwind, JSZip, Google Fonts) -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self';">
+    <!-- Previne atacurile de tip MIME-sniffing -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <!-- Controleaza ce informatii sunt trimise catre alte site-uri cand dai click pe link-uri -->
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <!-- ======================================================== -->
+
     <title>CR3 to CR2 Matrix Converter</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
