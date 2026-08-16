@@ -208,7 +208,7 @@
 </head>
 <body class="p-3 md:p-6">
 
-    <!-- Modal Erori (Pentru fișiere greșite) -->
+    <!-- Modal Erori -->
     <div id="errorModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
         <div class="modal-content p-6 max-w-sm w-full text-center rounded-lg">
             <h2 class="text-[var(--matrix-alert)] text-xl font-bold mb-4 tracking-wider">SYSTEM_ERROR</h2>
@@ -223,8 +223,8 @@
     <div id="uploadView" class="flex-1 flex flex-col items-center justify-center transition-opacity duration-500 w-full max-w-md mx-auto">
         <h1 class="text-3xl md:text-5xl font-bold mb-6 tracking-widest text-center">DATA_LINK</h1>
         <p class="mb-10 opacity-75 text-center text-sm md:text-base px-2">
-            Atașați fișiere RAW (.CR3). 
-            <br><span class="text-xs opacity-60">(Limită maximă sistem: ~200MB/sesiune)</span>
+            Atașați fișiere RAW (.CR3 / .CR2). 
+            <br><span class="text-xs opacity-60">(Fără limită de număr)</span>
         </p>
         
         <label for="fileInput" class="btn-matrix upload-pulse w-full text-lg cursor-pointer">
@@ -235,11 +235,6 @@
 
     <!-- ECRAN 2: PROCESARE -->
     <div id="processingView" class="hidden flex-1 flex-col md:flex-row w-full h-full gap-2 md:gap-6 overflow-hidden relative">
-        
-        <!-- ALERTĂ LIMITĂ MEMORIE (Apare doar dacă se taie din poze) -->
-        <div id="limitAlert" class="absolute top-2 left-1/2 -translate-x-1/2 z-20 hidden w-[90%] md:w-auto bg-[var(--matrix-alert)]/20 border border-[var(--matrix-alert)] text-[var(--matrix-alert)] text-xs md:text-sm p-2 rounded text-center backdrop-blur-md">
-            ⚠️ <b>LIMITĂ DE SIGURANȚĂ ATINSĂ:</b> Pentru a preveni blocarea telefonului, au fost procesate doar primele <span id="processedCount">0</span> fișiere. Descărcați-le, dați Reboot, și adăugați restul.
-        </div>
 
         <div class="flex-1 border border-[var(--matrix-olive)] rounded-lg p-3 md:p-5 flex flex-col overflow-hidden bg-black/40 mt-12 md:mt-0">
             <h2 class="text-center border-b border-[var(--matrix-olive)] pb-2 mb-2 font-bold tracking-widest text-sm md:text-base">SOURCE [.CR3]</h2>
@@ -290,11 +285,7 @@
     <script>
         let fileDataArray = [];
         let zip = null;
-        
-        // LIMITA DE SIGURANȚĂ PENTRU A PREVENI CRASH-UL (Setată la 200 MB)
-        const MAX_SAFE_MEMORY_BYTES = 200 * 1024 * 1024; 
-        
-        let totalSizeBytes = 0;
+        let isProcessing = false; // Flag pentru a preveni rulări multiple
 
         function formatBytesToMB(bytes) {
             return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
@@ -320,12 +311,14 @@
         function resetApp() {
             fileDataArray = [];
             zip = null;
-            totalSizeBytes = 0;
-            document.getElementById('fileInput').value = '';
+            isProcessing = false;
+            
+            // Resetează complet input-ul file
+            const fileInput = document.getElementById('fileInput');
+            fileInput.value = '';
             
             document.getElementById('sourceList').innerHTML = '';
             document.getElementById('targetList').innerHTML = '';
-            document.getElementById('limitAlert').classList.add('hidden');
             
             hideDownloadMenu();
             
@@ -365,38 +358,25 @@
         }
 
         async function handleFiles(event) {
+            if (isProcessing) return; // Previne dublul-click
+            
             const rawFiles = Array.from(event.target.files);
             if (rawFiles.length === 0) return;
 
+            isProcessing = true;
             fileDataArray = [];
-            totalSizeBytes = 0;
-            let filesToProcess = [];
-            let hitLimit = false;
-
-            // 1. Validare si Limitare Memorie
+            
+            // 1. Validare Extensii
             for (let i = 0; i < rawFiles.length; i++) {
                 const file = rawFiles[i];
                 const fileName = file.name.toLowerCase();
                 
                 if (!fileName.endsWith('.cr3') && !fileName.endsWith('.cr2')) {
-                    showError(`Fișier nepermis: ${file.name}\nDoar extensiile .CR3 sunt acceptate.`);
-                    event.target.value = ''; 
+                    showError(`Fișier nepermis: ${file.name}\nDoar extensiile .CR3 și .CR2 sunt acceptate.`);
+                    event.target.value = ''; // Reset the input
+                    isProcessing = false;
                     return;
                 }
-
-                // Verificăm dacă adăugarea acestui fișier depășește limita sigură
-                if (totalSizeBytes + file.size > MAX_SAFE_MEMORY_BYTES) {
-                    hitLimit = true;
-                    break; // Oprim adăugarea de fișiere
-                }
-
-                totalSizeBytes += file.size;
-                filesToProcess.push(file);
-            }
-
-            if (filesToProcess.length === 0) {
-                showError("Primul fișier este prea mare pentru a fi procesat în siguranță de browser.");
-                return;
             }
 
             // 2. Trecem la UI-ul de procesare
@@ -405,20 +385,14 @@
             procView.classList.remove('hidden');
             procView.classList.add('flex');
 
-            // Afișăm alerta dacă am tăiat din fișiere
-            if (hitLimit) {
-                document.getElementById('processedCount').innerText = filesToProcess.length;
-                document.getElementById('limitAlert').classList.remove('hidden');
-            }
-
             zip = new JSZip();
             const sourceList = document.getElementById('sourceList');
             const targetList = document.getElementById('targetList');
             const dataPacket = document.getElementById('dataPacket');
 
-            // 3. Procesarea animată
-            for (let i = 0; i < filesToProcess.length; i++) {
-                const file = filesToProcess[i];
+            // 3. Procesarea animată FĂRĂ LIMITĂ
+            for (let i = 0; i < rawFiles.length; i++) {
+                const file = rawFiles[i];
                 const originalName = file.name;
                 const sizeStr = `[${formatBytesToMB(file.size)}]`;
                 
@@ -446,7 +420,7 @@
                 void dataPacket.offsetWidth; 
                 dataPacket.classList.add('animate-packet');
 
-                await new Promise(r => setTimeout(r, 250)); // Animație mai rapidă
+                await new Promise(r => setTimeout(r, 250)); // Animație rapidă
 
                 // Apariție Țintă cu Buton (Are un ID unic pentru a-l găsi la click)
                 const targetEl = document.createElement('div');
@@ -469,6 +443,9 @@
             // Arată butoanele finale de jos
             document.getElementById('finishContainer').classList.remove('hidden');
             document.getElementById('finishContainer').classList.add('flex');
+            
+            // Permite un nou upload din UI
+            isProcessing = false;
         }
 
         async function downloadZip() {
@@ -488,4 +465,21 @@
                 a.click();
                 
                 setTimeout(() => {
-          
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    btn.innerText = '[ SUCCES ]';
+                    setTimeout(() => { btn.innerText = '[ GENEREAZĂ & DOWNLOAD ZIP ]'; btn.disabled = false; }, 3000);
+                }, 200);
+
+            } catch (error) {
+                console.error("Eroare ZIP:", error);
+                showError("SYSTEM_CRASH: Telefonul nu are suficientă memorie RAM pentru a crea arhiva ZIP. Folosiți butoanele individuale [ ⬇️ ].");
+                btn.innerText = '[ EROARE DE MEMORIE ]';
+                setTimeout(() => { btn.innerText = '[ GENEREAZĂ & DOWNLOAD ZIP ]'; btn.disabled = false; }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>
+
+
