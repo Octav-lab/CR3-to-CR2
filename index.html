@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CR3 to CR2 - Data Link</title>
+    
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob: 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline';">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        :root {
+            --matrix-dark: #050505;
+            --matrix-olive: #556B2F;
+            --matrix-olive-light: #6B8E23;
+            --matrix-glow: rgba(107, 142, 35, 0.4);
+            --matrix-alert: #cc3333;
+        }
+
+        body {
+            background-color: var(--matrix-dark);
+            color: var(--matrix-olive);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden; 
+            margin: 0;
+            padding: 0;
+            height: 100dvh; 
+            display: flex;
+            flex-direction: column;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--matrix-olive); border-radius: 10px; }
+
+        .btn-matrix {
+            background-color: transparent;
+            color: var(--matrix-olive);
+            border: 2px solid var(--matrix-olive);
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 8px var(--matrix-glow);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 24px;
+        }
+
+        .btn-matrix:active, .btn-matrix:hover:not(:disabled) {
+            background-color: var(--matrix-olive);
+            color: var(--matrix-dark);
+            box-shadow: 0 0 20px var(--matrix-olive-light);
+        }
+
+        .btn-matrix:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #333;
+            color: #555;
+            box-shadow: none;
+        }
+
+        .input-matrix {
+            background-color: transparent;
+            color: var(--matrix-olive-light);
+            border: 1px solid var(--matrix-olive);
+            padding: 12px;
+            font-family: 'Courier New', Courier, monospace;
+            outline: none;
+            width: 100%;
+            font-size: 16px; 
+            border-radius: 4px;
+        }
+
+        .upload-pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 8px var(--matrix-glow); }
+            50% { transform: scale(1.02); box-shadow: 0 0 20px var(--matrix-olive-light); }
+            100% { transform: scale(1); box-shadow: 0 0 8px var(--matrix-glow); }
+        }
+
+        .tube-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 100%;
+            height: 3rem; 
+        }
+        
+        .tube-line {
+            width: 4px; 
+            height: 100%;
+            background: rgba(85, 107, 47, 0.2);
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+        }
+
+        .packet {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 20px;
+            background: var(--matrix-olive-light);
+            box-shadow: 0 0 15px 5px var(--matrix-olive-light);
+            opacity: 0;
+        }
+
+        .animate-packet {
+            animation: moveDown 0.6s ease-in-out forwards;
+        }
+
+        @keyframes moveDown {
+            0% { top: -20px; opacity: 1; }
+            80% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        @media (min-width: 768px) {
+            .tube-wrapper { width: 6rem; height: 100%; }
+            .tube-line { width: 100%; height: 4px; }
+            .packet { width: 30px; height: 100%; }
+            .animate-packet { animation: moveRight 0.6s ease-in-out forwards; }
+        }
+
+        @keyframes moveRight {
+            0% { left: -30px; opacity: 1; }
+            80% { opacity: 1; }
+            100% { left: 100%; opacity: 0; }
+        }
+
+        .file-item {
+            padding: 10px 8px;
+            border-bottom: 1px dashed rgba(85, 107, 47, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            opacity: 0;
+            animation: fadeIn 0.4s ease-out forwards;
+            gap: 8px;
+        }
+        
+        .file-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .file-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis; 
+        }
+
+        .file-size {
+            opacity: 0.8;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .btn-download-single {
+            border: 1px solid var(--matrix-olive);
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            border-radius: 4px;
+            color: var(--matrix-olive-light);
+            transition: all 0.2s;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+        
+        .btn-download-single:hover:not(:disabled) {
+            background-color: var(--matrix-olive);
+            color: black;
+        }
+
+        /* Starea butonului cand a fost descarcat */
+        .btn-download-single:disabled {
+            border-color: #444;
+            color: #888;
+            background-color: transparent;
+            cursor: default;
+        }
+
+        .modal-content {
+            background-color: #0a0a0a;
+            border: 2px solid var(--matrix-alert);
+            box-shadow: 0 0 25px rgba(204, 51, 51, 0.4);
+        }
+    </style>
+</head>
+<body class="p-3 md:p-6">
+
+    <!-- Modal Erori -->
+    <div id="errorModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+        <div class="modal-content p-6 max-w-sm w-full text-center rounded-lg">
+            <h2 class="text-[var(--matrix-alert)] text-xl font-bold mb-4 tracking-wider">SYSTEM_ERROR</h2>
+            <p id="errorMessage" class="text-[var(--matrix-alert)] mb-6 text-sm">Fișier invalid detectat.</p>
+            <button onclick="closeError()" class="w-full py-3 text-sm font-bold border-2 border-[var(--matrix-alert)] text-[var(--matrix-alert)] hover:bg-[var(--matrix-alert)] hover:text-white transition-colors rounded">
+                [ REBOOT_SYSTEM ]
+            </button>
+        </div>
+    </div>
+
+    <!-- ECRAN 1: UPLOAD -->
+    <div id="uploadView" class="flex-1 flex flex-col items-center justify-center transition-opacity duration-500 w-full max-w-md mx-auto">
+        <h1 class="text-3xl md:text-5xl font-bold mb-6 tracking-widest text-center">DATA_LINK</h1>
+        <p class="mb-10 opacity-75 text-center text-sm md:text-base px-2">
+            Atașați fișiere RAW (.CR3 / .CR2). 
+            <br><span class="text-xs opacity-60">(Fără limită de număr)</span>
+        </p>
+        
+        <label for="fileInput" class="btn-matrix upload-pulse w-full text-lg cursor-pointer">
+            [ INIȚIAZĂ UPLOAD ]
+        </label>
+        <input type="file" id="fileInput" multiple accept=".cr3,.cr2" class="hidden" onchange="handleFiles(event)">
+    </div>
+
+    <!-- ECRAN 2: PROCESARE -->
+    <div id="processingView" class="hidden flex-1 flex-col md:flex-row w-full h-full gap-2 md:gap-6 overflow-hidden relative">
+
+        <div class="flex-1 border border-[var(--matrix-olive)] rounded-lg p-3 md:p-5 flex flex-col overflow-hidden bg-black/40 mt-12 md:mt-0">
+            <h2 class="text-center border-b border-[var(--matrix-olive)] pb-2 mb-2 font-bold tracking-widest text-sm md:text-base">SOURCE [.CR3]</h2>
+            <div id="sourceList" class="overflow-y-auto flex-1 pr-1 custom-scrollbar"></div>
+        </div>
+
+        <div class="tube-wrapper">
+            <div class="tube-line">
+                <div id="dataPacket" class="packet"></div>
+            </div>
+        </div>
+
+        <div class="flex-1 border border-[var(--matrix-olive)] rounded-lg p-3 md:p-5 flex flex-col overflow-hidden bg-black/40 relative">
+            <h2 class="text-center border-b border-[var(--matrix-olive)] pb-2 mb-2 font-bold tracking-widest text-[var(--matrix-olive-light)] text-sm md:text-base">TARGET [.CR2]</h2>
+            <div id="targetList" class="overflow-y-auto flex-1 pr-1 custom-scrollbar"></div>
+            
+            <div id="finishContainer" class="hidden w-full pt-3 mt-2 border-t border-[var(--matrix-olive)]/30 gap-2 flex-col">
+                <button onclick="showDownloadMenu()" class="btn-matrix w-full py-2 text-sm opacity-50 hover:opacity-100" style="border-style: dashed;">
+                    [ ARHIVARE ZIP (Opțional) ]
+                </button>
+                <button onclick="resetApp()" class="w-full py-3 text-sm border border-[var(--matrix-olive)] bg-[var(--matrix-olive)]/10 text-[var(--matrix-olive)] hover:bg-[var(--matrix-olive)] hover:text-black transition-colors rounded font-bold">
+                    [ REBOOT COMPLET SISTEM ]
+                </button>
+            </div>
+        </div>
+        
+        <!-- OVERLAY DOWNLOAD ZIP -->
+        <div id="downloadOverlay" class="absolute inset-0 z-30 bg-[var(--matrix-dark)]/95 backdrop-blur-md hidden flex-col items-center justify-center p-4">
+            <div class="w-full max-w-sm flex flex-col items-center">
+                <h3 class="text-2xl mb-8 text-[var(--matrix-olive-light)] font-bold tracking-widest">ARHIVARE ZIP</h3>
+                
+                <div class="w-full flex flex-col gap-2 mb-8">
+                    <label class="text-sm opacity-80 pl-1">Nume Arhivă ZIP:</label>
+                    <input type="text" id="zipName" value="Pachet_Date_CR2" class="input-matrix" placeholder="Numele arhivei..." autocomplete="off">
+                </div>
+                
+                <button onclick="downloadZip()" id="downloadBtn" class="btn-matrix w-full mb-4 text-base">
+                    [ GENEREAZĂ & DOWNLOAD ZIP ]
+                </button>
+                
+                <button onclick="hideDownloadMenu()" class="w-full py-2 mb-4 text-sm border border-dashed border-[var(--matrix-olive)] text-[var(--matrix-olive)] hover:bg-[var(--matrix-olive)] hover:text-black transition-colors rounded">
+                    < ÎNAPOI LA FIȘIERE INDIVIDUALE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let fileDataArray = [];
+        let zip = null;
+        let isProcessing = false; // Flag pentru a preveni rulări multiple
+
+        function formatBytesToMB(bytes) {
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').innerText = message;
+            document.getElementById('errorModal').classList.remove('hidden');
+        }
+        function closeError() { document.getElementById('errorModal').classList.add('hidden'); }
+
+        function showDownloadMenu() {
+            const overlay = document.getElementById('downloadOverlay');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+        }
+        function hideDownloadMenu() {
+            const overlay = document.getElementById('downloadOverlay');
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+        }
+
+        function resetApp() {
+            fileDataArray = [];
+            zip = null;
+            isProcessing = false;
+            
+            // Resetează complet input-ul file
+            const fileInput = document.getElementById('fileInput');
+            fileInput.value = '';
+            
+            document.getElementById('sourceList').innerHTML = '';
+            document.getElementById('targetList').innerHTML = '';
+            
+            hideDownloadMenu();
+            
+            const procView = document.getElementById('processingView');
+            procView.classList.add('hidden');
+            procView.classList.remove('flex');
+            
+            document.getElementById('uploadView').classList.remove('hidden');
+            document.getElementById('finishContainer').classList.add('hidden');
+            
+            const dBtn = document.getElementById('downloadBtn');
+            dBtn.innerText = '[ GENEREAZĂ & DOWNLOAD ZIP ]';
+            dBtn.disabled = false;
+        }
+
+        // --- SISTEMUL DE DESCĂRCARE INDIVIDUALĂ CU BIFĂ ---
+        function downloadIndividualFile(index) {
+            const data = fileDataArray[index];
+            const btn = document.getElementById(`btn-dl-${index}`);
+            
+            const url = URL.createObjectURL(data.file);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = data.newName;
+            document.body.appendChild(a);
+            a.click();
+            
+            // Schimbăm starea butonului să arate că a fost descărcat
+            btn.innerHTML = '[ ✔️ DESCARCAT ]';
+            btn.disabled = true;
+            
+            // Curățare memorie instantanee
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
+
+        async function handleFiles(event) {
+            if (isProcessing) return; // Previne dublul-click
+            
+            const rawFiles = Array.from(event.target.files);
+            if (rawFiles.length === 0) return;
+
+            isProcessing = true;
+            fileDataArray = [];
+            
+            // 1. Validare Extensii
+            for (let i = 0; i < rawFiles.length; i++) {
+                const file = rawFiles[i];
+                const fileName = file.name.toLowerCase();
+                
+                if (!fileName.endsWith('.cr3') && !fileName.endsWith('.cr2')) {
+                    showError(`Fișier nepermis: ${file.name}\nDoar extensiile .CR3 și .CR2 sunt acceptate.`);
+                    event.target.value = ''; // Reset the input
+                    isProcessing = false;
+                    return;
+                }
+            }
+
+            // 2. Trecem la UI-ul de procesare
+            document.getElementById('uploadView').classList.add('hidden');
+            const procView = document.getElementById('processingView');
+            procView.classList.remove('hidden');
+            procView.classList.add('flex');
+
+            zip = new JSZip();
+            const sourceList = document.getElementById('sourceList');
+            const targetList = document.getElementById('targetList');
+            const dataPacket = document.getElementById('dataPacket');
+
+            // 3. Procesarea animată FĂRĂ LIMITĂ
+            for (let i = 0; i < rawFiles.length; i++) {
+                const file = rawFiles[i];
+                const originalName = file.name;
+                const sizeStr = `[${formatBytesToMB(file.size)}]`;
+                
+                const newName = originalName.substring(0, originalName.lastIndexOf('.')) + '.CR2';
+                zip.file(newName, file);
+                
+                fileDataArray.push({
+                    file: file,
+                    newName: newName
+                });
+
+                // Apariție Sursă
+                const sourceEl = document.createElement('div');
+                sourceEl.className = 'file-item';
+                sourceEl.innerHTML = `
+                    <div class="file-info">
+                        <span class="file-name">> ${originalName}</span>
+                        <span class="file-size">${sizeStr}</span>
+                    </div>`;
+                sourceList.appendChild(sourceEl);
+                sourceList.scrollTop = sourceList.scrollHeight;
+
+                // Animație
+                dataPacket.classList.remove('animate-packet');
+                void dataPacket.offsetWidth; 
+                dataPacket.classList.add('animate-packet');
+
+                await new Promise(r => setTimeout(r, 250)); // Animație rapidă
+
+                // Apariție Țintă cu Buton (Are un ID unic pentru a-l găsi la click)
+                const targetEl = document.createElement('div');
+                targetEl.className = 'file-item text-[var(--matrix-olive-light)]';
+                targetEl.innerHTML = `
+                    <div class="file-info pr-2">
+                        <span class="file-name">> ${newName}</span>
+                        <span class="file-size">${sizeStr}</span>
+                    </div>
+                    <button id="btn-dl-${i}" onclick="downloadIndividualFile(${i})" class="btn-download-single flex-shrink-0">
+                        [ ⬇️ ]
+                    </button>
+                `;
+                targetList.appendChild(targetEl);
+                targetList.scrollTop = targetList.scrollHeight;
+
+                await new Promise(r => setTimeout(r, 100));
+            }
+
+            // Arată butoanele finale de jos
+            document.getElementById('finishContainer').classList.remove('hidden');
+            document.getElementById('finishContainer').classList.add('flex');
+            
+            // Permite un nou upload din UI
+            isProcessing = false;
+        }
+
+        async function downloadZip() {
+            const btn = document.getElementById('downloadBtn');
+            const nameInput = document.getElementById('zipName').value.trim() || 'Pachet_Date_CR2';
+            
+            btn.innerText = '[ SE COMPILEAZĂ... AȘTEPTAȚI ]';
+            btn.disabled = true;
+
+            try {
+                const content = await zip.generateAsync({ type: "blob", compression: "STORE" });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${nameInput}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    btn.innerText = '[ SUCCES ]';
+                    setTimeout(() => { btn.innerText = '[ GENEREAZĂ & DOWNLOAD ZIP ]'; btn.disabled = false; }, 3000);
+                }, 200);
+
+            } catch (error) {
+                console.error("Eroare ZIP:", error);
+                showError("SYSTEM_CRASH: Telefonul nu are suficientă memorie RAM pentru a crea arhiva ZIP. Folosiți butoanele individuale [ ⬇️ ].");
+                btn.innerText = '[ EROARE DE MEMORIE ]';
+                setTimeout(() => { btn.innerText = '[ GENEREAZĂ & DOWNLOAD ZIP ]'; btn.disabled = false; }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>
+
+
